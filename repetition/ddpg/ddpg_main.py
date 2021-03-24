@@ -39,6 +39,7 @@ class pi_net(nn.Module):
 class Buffer(object):
     def __init__(self, obs_dim, act_dim, size):
         self.size = size
+        self.max_size = size
         self.buf_rew = np.zeros((size,), dtype=np.float32)
         self.buf_obs = np.zeros((size, obs_dim), dtype=np.float32)
         self.buf_act = np.zeros((size, act_dim), dtype=np.float32)
@@ -53,7 +54,9 @@ class Buffer(object):
         self.buf_act[self.ptr] = act
         self.buf_rew[self.ptr] = rew
         self.done[self.ptr] = done
-        self.ptr += 1
+        # self.ptr += 1
+        self.ptr = (self.ptr + 1) % self.max_size
+        self.size = min(self.size + 1, self.max_size)
 
     # def finish_path(self):
 
