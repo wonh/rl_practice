@@ -3,7 +3,7 @@ import numpy as np
 import argparse
 from gym.spaces import Discrete, Box
 from torch import nn
-from .ppo_core import mlp
+from ppo_core import mlp
 from torch.distributions import Normal
 import gym
 import copy
@@ -203,8 +203,8 @@ if __name__ == '__main__':
 
     # mpi_fork(args.cpu)  # run parallel code with mpi
 
-    from spinup.utils.run_utils import setup_logger_kwargs
+    # from spinup.utils.run_utils import setup_logger_kwargs
 
-    logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
+    # logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
     DDPG(lambda: gym.make(args.env), 10000, int(args.total_steps), q_net, pi_net, 1e-3, 1e-3,)

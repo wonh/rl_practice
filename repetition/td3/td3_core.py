@@ -8,8 +8,7 @@ def mlp(sizes, activation, output_activation=nn.Identity):
     for i in range(len(sizes)-1):
         act = activation if i < len(sizes)-2 else output_activation
         layers.append(nn.Linear(sizes[i], sizes[i+1]))
-        layers.append(act)
-
+        layers.append(act())
     return nn.Sequential(*layers)
 
 class Actor(nn.Module):
@@ -29,7 +28,7 @@ class Critic(nn.Module):
         self.model = mlp([obs_dim + act_dim] + list(hid_size) + [1], activation)
 
     def forward(self, obs, act):
-        return self.model(torch.cat((obs, act), -1)).unsqueeze(-1)
+        return self.model(torch.cat((obs, act), -1)).squeeze(-1)
 
 class Actor_Critic(nn.Module):
 
@@ -47,5 +46,5 @@ class Actor_Critic(nn.Module):
 
     def act(self, obs):
         with torch.no_grad():
-            res = self.act(obs).numpy()
-        return res
+            res = self.pi(obs)
+            return res.numpy()
