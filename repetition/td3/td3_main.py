@@ -147,7 +147,8 @@ if __name__ == '__main__':
     parser.add_argument("--update_after", type=int, default=1000)
     parser.add_argument("--update_every", type=int, default=50)
     parser.add_argument("--batch_size", type=int, default=100)
+    parser.add_argument("--act_noise", type=float, default=0.1)
     args = parser.parse_args()
 
     td3(lambda: gym.envs.make(args.env), args.epochs, args.steps_per_epoch, args.max_ep_len, args.start_steps, args.buffer_size, args.batch_size, 1e-3, 1e-3,
-            args.update_every, args.update_after, polyak=0.995, gamma=0.99, act_noise=0.1, )
+            args.update_every, args.update_after, polyak=0.995, gamma=0.99, act_noise=args.act_noise, )

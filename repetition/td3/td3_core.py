@@ -16,7 +16,7 @@ class Actor(nn.Module):
 
     def __init__(self, obs_dim, act_dim, limit, hid_size, activation):
         super().__init__()
-        self.model = mlp([obs_dim]+list(hid_size)+[act_dim], nn.Tanh)
+        self.model = mlp([obs_dim]+list(hid_size)+[act_dim], activation, nn.Tanh)
         self.act_limit = limit
 
     def forward(self, obs):
