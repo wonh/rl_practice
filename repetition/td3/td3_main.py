@@ -118,7 +118,7 @@ def td3(env_fn, epochs, steps_per_epoch, max_ep_len, start_steps, buffer_size, b
             act = env.action_space.sample()
 
         obs2, rew, done, _ = env.step(act)
-        buffer.store(obs, act, rew2, obs2, done)
+        buffer.store(obs, act, rew, obs2, done)
         ep_len += 1
         ep_ret += rew
         obs = obs2
