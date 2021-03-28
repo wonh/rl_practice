@@ -118,7 +118,7 @@ def td3(env_fn, epochs, steps_per_epoch, max_ep_len, start_steps, buffer_size, b
             act = env.action_space.sample()
 
         obs2, rew, done, _ = env.step(act)
-        buffer.store(obs, act, rew, obs2, done)
+        buffer.store(obs, act, rew2, obs2, done)
         ep_len += 1
         ep_ret += rew
         obs = obs2
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     parser.add_argument("--env", type=str, default='CartPole-v0')
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--steps_per_epoch", type=int, default=4000)
-    parser.add_argument("--start_steps", type=int, default=50000)
+    parser.add_argument("--start_steps", type=int, default=10000)
     parser.add_argument("--max_ep_len", type=int, default=1000)
     parser.add_argument("--buffer_size", type=int, default=1000000)
     parser.add_argument("--update_after", type=int, default=1000)
