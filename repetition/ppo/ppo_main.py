@@ -1,9 +1,9 @@
 import numpy as np
-from .ppo_core import discount_cumsum
+from ppo_core import discount_cumsum
 import torch
 import gym
 from gym.spaces import Discrete,Box
-from .ppo_core import ActorCritic
+from ppo_core import ActorCritic
 from torch.optim import Adam
 
 def combine_shape(length, shape=None):
@@ -62,7 +62,7 @@ class ReplayBuffer(object):
 
 def ppo(env_fn, actor_critic=ActorCritic, ac_kwargs=dict(), seed=2,
         steps_per_epoch=4000, epochs=50, gamma=0.99, clip_ratio=0.2, pi_lr=3e-4,
-        vf_lr=1e-3, train_pi_iters=320, train_v_iters=320, lam=0.97, max_ep_len=1000,
+        vf_lr=1e-3, train_pi_iters=80, train_v_iters=80, lam=0.97, max_ep_len=1000,
         target_kl=0.01, logger_kwargs=dict(), save_freq=10):
     #set seed
     # seed += 10000 * proc_id()
