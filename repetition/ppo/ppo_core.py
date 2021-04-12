@@ -195,7 +195,7 @@ class Model(object):
         for j in range(n):
             o, r, d, ep_ret, ep_len = test_env.reset(), 0, False, 0, 0
             while not (d or ep_len==args.max_ep_len):
-                o, r, d = test_env.step(self.act(o))
+                o, r, d, _ = test_env.step(self.act(torch.as_tensor(o, dtype=torch.float32)))
                 ep_len += 1
                 ep_ret += r
             test_ret.append(ep_ret)

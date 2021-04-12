@@ -48,7 +48,7 @@ def discount_cumsum(x, discount):
 @ray.remote
 class ReplayBuffer(object):
 
-    def __init__(self, obs_dim, act_dim, size, workers, lam=0.05, gamma=0.99):
+    def __init__(self, obs_dim, act_dim, size, workers, lam=0.97, gamma=0.99):
         self.ob = np.zeros(combine_shape(size*workers, obs_dim), dtype=np.float32)
         self.act = np.zeros(combine_shape(size*workers, act_dim), dtype=np.float32)
         self.val = np.zeros(size*workers, dtype=np.float32)
@@ -56,21 +56,26 @@ class ReplayBuffer(object):
         self.adv = np.zeros(size*workers, dtype=np.float32)
         self.logp = np.zeros(size*workers, dtype=np.float32)
         self.ret = np.zeros(size*workers, dtype=np.float32)
-        self.start_ptr, self.ptr, self.size = [0] * workers, [0] * workers, size
+        self.start_ptr, self.ptr, self.size = [i * size for i in range(workers)], [i * size for i in range(workers)], size
         self.gamma, self. lam = gamma, lam
-        self.wokers = workers
+        self.workers = workers
+        print(self.start_ptr, self.ptr)
 
     def store(self, ob, act, val, rew, logp, worker_index):
-        # print(self.ptr[worker_index] , self.size)
-        assert self.ptr[worker_index] < self.size
-        self.ob[self.ptr[worker_index] + worker_index*self.size] = ob
-        self.act[self.ptr[worker_index] + worker_index*self.size] = act
-        self.val[self.ptr[worker_index] + worker_index*self.size] = val
-        self.rew[self.ptr[worker_index] + worker_index*self.size] = rew
-        self.logp[self.ptr[worker_index] + worker_index*self.size] = logp
+        # if self.ptr[worker_index] >= self.size * (worker_index+1):
+        #     print(self.ptr[worker_index], self.size * (worker_index+1))
+        assert self.ptr[worker_index] < self.size * (worker_index+1)
+        index = self.ptr[worker_index]
+        self.ob[index] = ob
+        self.act[index] = act
+        self.val[index] = val
+        self.rew[index] = rew
+        self.logp[index] = logp
         self.ptr[worker_index] += 1
+        # print('after', worker_index, self.ptr)
 
-    def finish_path(self,last_val=0, worker_index=0):
+    def finish_path(self, last_val, worker_index):
+        # print(self.start_ptr[worker_index], self.ptr[worker_index])
         path_index = slice(self.start_ptr[worker_index], self.ptr[worker_index])
         rews = np.append(self.rew[path_index], last_val)
         vals = np.append(self.val[path_index], last_val)
@@ -80,10 +85,12 @@ class ReplayBuffer(object):
         # self.ret[path_index] = reward_to_go(self.rew, gamma=self.gamma)
         self.ret[path_index] = discount_cumsum(rews, self.gamma)[:-1]
         self.start_ptr[worker_index] = self.ptr[worker_index]
+        # print(self.start_ptr[worker_index], self.ptr[worker_index])
 
     def get(self):
-        assert sum(self.ptr) == self.size * self.wokers
-        self.start_ptr, self.ptr = [0]*self.wokers, [0]*self.wokers
+        # assert self.ptr == [(i+1) * self.size for i in range(self.workers)]
+        self.start_ptr, self.ptr = [i * self.size for i in range(self.workers)], [i * self.size for i in range(self.workers)]
+        # print(self.ptr)
         #正规化advtage
         adv_mu, adv_std = np.mean(self.adv), np.std(self.adv)
         self.adv = (self.adv - adv_mu) / adv_std
@@ -125,16 +132,12 @@ def worker_train(ps, replay_buffer, args):
     weights = ray.get(ps.pull.remote(keys))
     agent.set_weights(keys, weights)
 
-    cnt = 1
-    while True:
-        agent.train(replay_buffer, args)
+    agent.train(replay_buffer, args)
+    keys, values = agent.get_weights()
+    ps.push.remote(keys, values)
 
-        if cnt % 300 ==0:
-            keys, values = agent.get_weights()
-            ps.push.remote(keys, values)
-        cnt += 1
 
-@ray.remote
+@ray.remote(num_gpus=1, max_calls=1)
 def worker_rollout(ps, replay_buffer, args, worker_index):
     #build rollout network
     #pull weights from ps
@@ -155,12 +158,11 @@ def worker_rollout(ps, replay_buffer, args, worker_index):
         o2, r, done, info = env.step(a)
         ep_ret += r
         ep_len += 1
-        replay_buffer.store.remote(o, a, v, r, logp, worker_index)
+        replay_buffer.store.remote(o, a, v, r, logp, worker_index)  #serization
         o = o2
-
         time_out = (ep_len==args.max_ep_len)
         terminal = time_out or done
-        epoch_done = t % args.steps_per_epoch == 0 and t > 0
+        epoch_done = t==(args.steps_per_epoch -1)
         if terminal or epoch_done:
             if time_out or epoch_done:
                 _, v, _ = agent.step(torch.as_tensor(o, dtype=torch.float32))
@@ -195,9 +197,11 @@ def worker_test(ps, replay_buffer, args, worker_index=0):
         logger.log_tabular('AverageTestEpRet', avg_ret)
         logger.log_tabular('Time', time.time() - start_time)
         logger.dump_tabular()
+        time.sleep(5)
         weights = ray.get(ps.pull.remote(keys))
         agent.set_weights(keys, weights)
-        print(avg_ret)
+        # print('avg_ret:', avg_ret)
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser("ppo paralization")
@@ -208,7 +212,7 @@ if __name__ == '__main__':
     parser.add_argument('--lam', type=float, default=0.97)
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--epochs', type=int, default=50)
-    parser.add_argument('--steps_per_epoch', type=int, default=4000)
+    parser.add_argument('--steps_per_epoch', type=int, default=1000)
     parser.add_argument('--exp_name', type=str, default='dppo_6worker')
     args = parser.parse_args()
 
@@ -236,28 +240,27 @@ if __name__ == '__main__':
     args.hidden_size = [args.hid] * args.l
     args.activation = nn.Tanh
 
-    args.num_workers = 6
+    args.num_workers = 4
     args.num_learners = 1
 
-    ray.init()
+    ray.init(num_cpus=8, num_gpus=4, resources={'Custom': 2})
 
     net = Model(args)
     all_keys, all_values = net.get_weights()
     ps = ParameterServer.remote(all_keys, all_values)
 
     # replay_buffer = ReplayBuffer.remote(args.obs_dim, args.act_dim, args.replay_size)
-    replay_buffer = ReplayBuffer.remote(env.observation_space.shape, env.action_space.shape, args.steps_per_epoch, args.num_workers,
-                          args.gamma, args.lam)
+    replay_buffer = ReplayBuffer.remote(env.observation_space.shape, env.action_space.shape, args.steps_per_epoch, args.num_workers,)
     start_time = time.time()
 
     # Start some training tasks.
-    task_rollout = [worker_rollout.remote(ps, replay_buffer, args, i) for i in range(args.num_workers)]  #同步
-
-    time.sleep(10)
-
-    task_train = [worker_train.remote(ps, replay_buffer, args) for i in range(args.num_learners)]
-
-    time.sleep(10)
-
-    task_test = worker_test.remote(ps, start_time, args)
-    ray.wait(task_rollout)
+    for i in range(10):
+        task_rollout = [worker_rollout.remote(ps, replay_buffer, args, i) for i in range(args.num_workers)]  #同步
+        # time.sleep(10)
+        ray.get(task_rollout)
+        print('replay done')
+        task_train = [worker_train.remote(ps, replay_buffer, args)]
+        print('train')
+        ray.get(task_train)
+        # ray.wait(task_train)
+        worker_test.remote(ps, replay_buffer, args)
