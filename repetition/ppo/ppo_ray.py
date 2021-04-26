@@ -59,7 +59,8 @@ class ReplayBuffer(object):
         self.start_ptr, self.ptr, self.size = [i * size for i in range(workers)], [i * size for i in range(workers)], size
         self.gamma, self. lam = gamma, lam
         self.workers = workers
-        print(self.start_ptr, self.ptr)
+        # print(self.start_ptr, self.ptr)
+        self.full = False
 
     def store(self, ob, act, val, rew, logp, worker_index):
         # if self.ptr[worker_index] >= self.size * (worker_index+1):
@@ -86,6 +87,7 @@ class ReplayBuffer(object):
         self.ret[path_index] = discount_cumsum(rews, self.gamma)[:-1]
         self.start_ptr[worker_index] = self.ptr[worker_index]
         # print(self.start_ptr[worker_index], self.ptr[worker_index])
+        self.full = True
 
     def get(self):
         # assert self.ptr == [(i+1) * self.size for i in range(self.workers)]
@@ -97,6 +99,7 @@ class ReplayBuffer(object):
         data = {"obs":self.ob, "act":self.act,
                 "adv":self.adv, "logp":self.logp,
                 "ret":self.ret}
+        self.full = False
         return {k: torch.as_tensor(v, dtype=torch.float32) for k,v in data.items()}
 
 @ray.remote
@@ -254,13 +257,13 @@ if __name__ == '__main__':
     start_time = time.time()
 
     # Start some training tasks.
-    for i in range(10):
+    for i in range(50):
         task_rollout = [worker_rollout.remote(ps, replay_buffer, args, i) for i in range(args.num_workers)]  #同步
         # time.sleep(10)
-        ray.get(task_rollout)
+        # ray.get(task_rollout)
         print('replay done')
         task_train = [worker_train.remote(ps, replay_buffer, args)]
         print('train')
-        ray.get(task_train)
+        # ray.get(task_train)
         # ray.wait(task_train)
         worker_test.remote(ps, replay_buffer, args)
